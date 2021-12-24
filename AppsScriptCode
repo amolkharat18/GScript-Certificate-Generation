@@ -1,0 +1,70 @@
+var destinationFolderId = '1D7mMqgSKgIcFDF5Ts4bOCBSIqfIiHU6O';
+var dataRangeNotation = 'Sheet1!A2:B4';
+var dataSpreadsheetId = "11F5iEEWU8yVb8GEiNHpROPJ-4FAgsSFwPtomfLKzArA";
+var templatePresentationId = "1947YbNmsqDATX4e1KJENT5_MBPuaDRY7WQXs3th3SsQ";
+var values = SpreadsheetApp.openById(dataSpreadsheetId).getRange(dataRangeNotation).getValues();
+
+function createPDF() {
+  for (var i = 0; i < values.length; ++i) {
+    var row = values[i];
+    var emailID = row[0]; // email in column 1
+    var participantName = row[1]; // name in column 2
+    
+    Logger.log(participantName);
+
+    var copyTitle = participantName + '_certificate';
+    var copyFile = {
+      title: copyTitle,
+      parents: [{id: destinationFolderId}]
+    };
+
+    copyFile = Drive.Files.copy(copyFile, templatePresentationId);
+    var presentationCopyId = copyFile.id;
+  
+    // Create the text merge (replaceAllText) requests for this presentation.
+    requests = [{
+      replaceAllText: {
+        containsText: {
+          text: '{{pname}}',
+          matchCase: true
+        },
+        replaceText: participantName
+      }
+    }];
+
+    // Execute the requests for this presentation.
+    var result = Slides.Presentations.batchUpdate({
+      requests: requests
+    }, presentationCopyId);
+    
+    // Count the total number of replacements made.
+    var numReplacements = 0;
+    result.replies.forEach(function(reply) {
+      numReplacements += reply.replaceAllText.occurrencesChanged;
+    });
+    
+    var folder = DriveApp.getFolderById(destinationFolderId);
+    var blob = DriveApp.getFileById(presentationCopyId).getBlob();
+    var pdfFile = folder.createFile(blob);
+    sendEmail(pdfFile.getId(), participantName, emailID)
+    
+    DriveApp.getFileById(presentationCopyId).setTrashed(true);
+  }
+  
+}
+
+function sendEmail(fileID, pname, emailId){
+  console.log('sending mail ...');
+
+  var file = DriveApp.getFileById(fileID);
+  var subject = 'PHP MySQL Certificate';
+
+  var body = 'Hello ' + pname + '\n' + 'This is test email.';
+
+  MailApp.sendEmail(emailId, subject, body, {
+      name: 'Workshop Coordinator',
+      attachments: [file.getAs(MimeType.PDF)]
+  });
+
+  console.log('mail sent ...');
+}
